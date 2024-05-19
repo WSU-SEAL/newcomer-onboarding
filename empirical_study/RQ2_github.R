@@ -325,7 +325,7 @@ for(k in 1:3){
   
   newcomer_glm_acceptance <- glm(as.formula(formula_string) , data=newcomer_indv,  x=T, y=T, 
                             family = binomial)
-  
+  av = anova(newcomer_glm_acceptance, type="II", test="LR")
   #summary(newcomer_glm_acceptance)
   
   model_summary =coef(summary(newcomer_glm_acceptance))
@@ -335,11 +335,13 @@ for(k in 1:3){
     #print(format(round(odds_ratio, 2), nsmall = 2))
     if(is.na(odds_ratio)||is.infinite(odds_ratio)){
       rows[i] <- paste(rows[i],'--',sep=" & ")
+      rows[i] <- paste(rows[i],'--',sep=" & ")
     }
     else{
       pvalue =round(model_summary[grepl(paste(result_vars[i],'$',sep=""),row.names(model_summary)), 4],4)
       rows[i] <- paste(rows[i],format(round(odds_ratio, 2), nsmall = 2),sep=" & ")
       rows[i] <- paste(rows[i],get_p_code(pvalue),sep="")
+      rows[i] <- paste(rows[i], format(round(100*av[result_vars[i], 2]/av['NULL', 4], 2), nsmall = 2) ,sep=" & ")
     }
     
     #print(pvalue)
@@ -380,6 +382,8 @@ for(k in 1:3){
   non_newcomer_glm_acceptance <- glm(as.formula(non_new_formula_string) , data=non_newcomer_indv,  x=T, y=T, 
                                  family = binomial)
   
+  av = anova(non_newcomer_glm_acceptance, type="II", test="LR")
+  
   summary(non_newcomer_glm_acceptance)
   veal=round(PseudoR2(non_newcomer_glm_acceptance,which = "VeallZimmermann"),3)
   print(veal)
@@ -392,11 +396,13 @@ for(k in 1:3){
     print(format(round(odds_ratio, 2), nsmall = 2))
     if(is.na(odds_ratio)||is.infinite(odds_ratio)){
       rows[i] <- paste(rows[i],'--',sep=" & ")
+      rows[i] <- paste(rows[i],'--',sep=" & ")
     }
     else{
       pvalue =round(model_summary[grepl(paste(result_vars[i],'$',sep=""),row.names(model_summary)), 4],4)
       rows[i] <- paste(rows[i],format(round(odds_ratio, 2), nsmall = 2),sep=" & ")
       rows[i] <- paste(rows[i],get_p_code(pvalue),sep="")
+      rows[i] <- paste(rows[i], format(round(100*av[result_vars[i], 2]/av['NULL', 4], 2), nsmall = 2) ,sep=" & ")
     }
   }
   
