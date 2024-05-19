@@ -294,7 +294,7 @@ for (project in names(projects)) {
   dataset = read.csv(datafile, header = TRUE)
   print(nrow(dataset))
   
- 
+  
   dataset$doc_file_ratio=  dataset$doc_file_count/dataset$file_count
   dataset$log_author_promptness=log(dataset$author_promptness+1)
   dataset$log_insertions=log(dataset$insertions+1)
@@ -317,19 +317,19 @@ for (project in names(projects)) {
   
   
   for (variable in survived_vars){
-      if (variable !="is_bugfix")
-        formula_string =paste(formula_string, "+ ", variable,  sep=" ")
-  
+    if (variable !="is_bugfix")
+      formula_string =paste(formula_string, "+ ", variable,  sep=" ")
+    
   }
-    
-    
+  
+  
   
   
   #print (formula_string)
   
   newcomer_glm_acceptance <- glm(as.formula(formula_string) , data=newcomerDS,  x=T, y=T, 
-                            family = binomial)
-  
+                                 family = binomial)
+  av = anova(newcomer_glm_acceptance, type="II", test="LR")
   #summary(newcomer_glm_acceptance)
   
   model_summary =coef(summary(newcomer_glm_acceptance))
@@ -339,11 +339,13 @@ for (project in names(projects)) {
     #print(format(round(odds_ratio, 2), nsmall = 2))
     if(is.na(odds_ratio)||is.infinite(odds_ratio)){
       rows[i] <- paste(rows[i],'--',sep=" & ")
+      rows[i] <- paste(rows[i],'--',sep=" & ")
     }
     else{
       pvalue =round(model_summary[grepl(paste(result_vars[i],'$',sep=""),row.names(model_summary)), 4],4)
       rows[i] <- paste(rows[i],format(round(odds_ratio, 2), nsmall = 2),sep=" & ")
       rows[i] <- paste(rows[i],get_p_code(pvalue),sep="")
+      rows[i] <- paste(rows[i], format(round(100*av[result_vars[i], 2]/av['NULL', 4], 2), nsmall = 2) ,sep=" & ")
     }
     
     #print(pvalue)
@@ -371,7 +373,7 @@ for (project in names(projects)) {
   
   for (variable in non_new_survived_vars){
     if (variable !="is_bugfix")
-    non_new_formula_string =paste(formula_string, "+ ", variable,  sep=" ")
+      non_new_formula_string =paste(formula_string, "+ ", variable,  sep=" ")
     
     
   }
@@ -380,8 +382,13 @@ for (project in names(projects)) {
   
   
   non_newcomer_glm_acceptance <- glm(as.formula(non_new_formula_string) , data=otherDS,  x=T, y=T, 
-                                 family = binomial)
+                                     family = binomial)
   
+  print('Anova print')
+  av = anova(non_newcomer_glm_acceptance, type="II", test="LR")
+  #print(av[`Resid. Dev`])
+  
+  #print(100*av['is_bugfix', 2]/av['NULL', 4])
   
   #summary(non_newcomer_glm_acceptance)
   
@@ -389,13 +396,16 @@ for (project in names(projects)) {
   for(i in 1:length(result_vars)){
     odds_ratio =exp(coef(non_newcomer_glm_acceptance)[result_vars[i]])
     #print(format(round(odds_ratio, 2), nsmall = 2))
+    
     if(is.na(odds_ratio)||is.infinite(odds_ratio)){
+      rows[i] <- paste(rows[i],'--',sep=" & ")
       rows[i] <- paste(rows[i],'--',sep=" & ")
     }
     else{
       pvalue =round(model_summary[grepl(paste(result_vars[i],'$',sep=""),row.names(model_summary)), 4],4)
       rows[i] <- paste(rows[i],format(round(odds_ratio, 2), nsmall = 2),sep=" & ")
       rows[i] <- paste(rows[i],get_p_code(pvalue),sep="")
+      rows[i] <- paste(rows[i], format(round(100*av[result_vars[i], 2]/av['NULL', 4], 2), nsmall = 2) ,sep=" & ")
     }
   }
   
@@ -409,13 +419,14 @@ for (project in names(projects)) {
   #model_coefficients <- coef(non_newcomer_glm_acceptance)
   #print(model_summary)
   #print(exp(model_coefficients))
+  #break
   
 }
 
 
 
 print(rows)
-print(r_sq) 
+print(r_sq)
 
 
 
