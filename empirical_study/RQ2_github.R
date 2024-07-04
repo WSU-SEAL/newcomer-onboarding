@@ -267,54 +267,6 @@ print(r_sq_non_nc)
 
 
 
-#for GitHub large non-newcomers
-
-
-
-
-datafile = "./nonnewcomer_large.csv"
-print(datafile)
-
-dataset = read.csv(datafile, header = TRUE)
-summary(dataset)
-
-
-dynamic_vars = c('log_insertions','log_deletions','log_total_churn','num_patch',
-                 'log_author_promptness',
-                 'is_bugfix', 'is_gfi','change_entropy',
-                 'num_changed_files','doc_file_ratio','num_newfile',
-                 'title_length',
-                 'desc_length','title_readability','desc_readability')
-
-non_new_survived_vars = AutoSpearman(dataset = dataset, metrics = dynamic_vars,verbose = T)
-print(non_new_survived_vars)
-
-non_new_formula_string ="is_merged ~ is_bugfix "
-
-
-for (variable in non_new_survived_vars){
-  if (variable !="is_bugfix" && !grepl(variable, non_new_formula_string)){
-    non_new_formula_string =paste(non_new_formula_string, "+ ", variable,  sep=" ")
-    #print(non_new_formula_string)
-  }
-  
-}
-
-#summary(non_newcomer_indv)
-
-#non_new_formula_string <- "is_merged ~ is_bugfix + log_insertions +  log_deletions +  num_patch  +  log_author_promptness +  is_gfi +  change_entropy +  doc_file_ratio" #+ " +   num_newfile# title_readability +  desc_readability ++ title_length +  desc_length  +  "
-
-non_newcomer_glm_acceptance <- glm(as.formula(non_new_formula_string) , data=dataset,  x=T, y=T, 
-                                   family = binomial)
-
-summary(non_newcomer_glm_acceptance)
-
-veal=round(PseudoR2(non_newcomer_glm_acceptance,which = "VeallZimmermann"),3)
-print(veal)
-
-odds_ratio =exp(coef(non_newcomer_glm_acceptance))
-print(odds_ratio)
-
 
 
 
