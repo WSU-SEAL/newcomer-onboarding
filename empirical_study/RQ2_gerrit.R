@@ -11,232 +11,9 @@ library(DescTools)
 library(effects)
 library(tidyverse)
 
+library(lmtest)
 
-get.automated.spearman <- function(dataset, metrics, spearman.threshold, verbose = F){
-  
-  .get.higher.correlation <- function(index1, index2, metrics, metric.correlations, verbose = T, count){
-    metric1 <- metrics[index1]
-    metric2 <- metrics[index2]
-    if(verbose)
-      cat(paste0('Step ', count, ' - {', metric1, ', ', metric2, '} > '))# are correlated with r = ', metric.correlations[metric1, metric2], '\n'))
-    metric1.correlation <- mean(metric.correlations[metric1, !metrics %in% c(metric1, metric2)])
-    metric2.correlation <- mean(metric.correlations[metric2, !metrics %in% c(metric1, metric2)])
-    if(metric1.correlation <= metric2.correlation){
-      return(index2)
-    } else {
-      return(index1)
-    }
-  }
-  
-  metric.correlations <- abs(rcorr(as.matrix(dataset[, metrics]), type = 'spearman')$r)
-  
-  above.threshold <- which((metric.correlations >= spearman.threshold), arr.ind = TRUE)
-  row.names(above.threshold) <- NULL
-  above.threshold <- as.data.frame(above.threshold, row.names = NULL)
-  above.threshold <- above.threshold[above.threshold$row != above.threshold$col, ]
-  above.threshold$correlation <- 100
-  for(i in 1:nrow(above.threshold)){
-    above.threshold$correlation[i] <- metric.correlations[above.threshold$row[i], above.threshold$col[i]]
-  }
-  above.threshold <- above.threshold[order(-above.threshold$correlation), ]
-  
-  exclude.metrics <- {}
-  count <- 1
-  repeat{
-    if(nrow(above.threshold) == 0)
-      break
-    tmp <- above.threshold[1, ]
-    exclude.index <- .get.higher.correlation(tmp$row, tmp$col, metrics, metric.correlations, verbose, count)
-    exclude.metrics <- c(exclude.metrics, metrics[exclude.index])
-    if(verbose){
-      cat(paste0(metrics[exclude.index], '\n'))
-      count <- count + 1
-    }
-    above.threshold <- above.threshold[-which((above.threshold$row == exclude.index) | (above.threshold$col == exclude.index)), ]
-  }
-  selected.metrics <- metrics[!metrics %in% exclude.metrics]
-  return(selected.metrics)
-}
-
-
-remove.constant.categorical <-
-  function(dataset,
-           metrics) {
-    # Check constant metrics
-    constant <-
-      apply(dataset[, metrics], 2, function(x)
-        max(x) == min(x))
-    constant <- names(constant[constant == TRUE])
-    # Remove constant metrics
-    if (length(constant) > 0) {
-      print("Constant")
-      print(constant)
-      metrics <- metrics[!metrics %in% constant]
-    }
-    
-    # Check categorical metrics
-    category <- sapply(dataset[, metrics], class)
-    category <- names(category[category == "character"])
-    # Remove categorical metrics from Spearman Analysis
-    if (length(category) > 0) {
-      print("Category:")
-      print(category)
-      metrics <- metrics[!metrics %in% category]
-    }
-    
-    return(metrics)
-  }
-
-
-stepwise.vif <-
-  function (dataset,
-            metrics,
-            vif.threshold = 5,
-            verbose = F)
-  {
-    dataset$dummy <- rnorm(nrow(dataset))
-    output <- metrics
-    step.count <- 1
-    output.results <- list()
-    repeat {
-      vif.scores <- vif(lm(as.formula(paste0(
-        "dummy~", paste0(output,
-                         collapse = "+")
-      )), data = dataset))
-      na.coefficients <- Reduce('|', is.nan(vif.scores))
-      if (na.coefficients) {
-        stop("NA coefficient in a regression model.")
-      }
-      output.results[[step.count]] <-
-        sort(vif.scores, decreasing = F)
-      vif.scores <- vif.scores[vif.scores >= vif.threshold]
-      if (length(vif.scores) == 0)
-        break
-      drop.var <-
-        names(vif.scores[vif.scores == max(vif.scores)])[1]
-      if (verbose) {
-        print(paste0(
-          "Step ",
-          step.count,
-          " - Exclude ",
-          drop.var,
-          " (VIF = ",
-          max(vif.scores),
-          ")"
-        ))
-      }
-      step.count <- step.count + 1
-      output <- output[!output %in% drop.var]
-    }
-    names(output.results) <- paste0("Iteration ", 1:step.count)
-    names(output.results)[length(output.results)] <- "Final"
-    return(output)
-  }
-
-
-
-AutoSpearman <-
-  function(dataset,
-           metrics,
-           spearman.threshold = 0.7,
-           vif.threshold = 5,
-           verbose = T) {
-    # Remove constant metrics and categorical metrics
-    metrics <- remove.constant.categorical(dataset, metrics)
-    print(metrics)
-    
-    
-    spearman.metrics <-
-      get.automated.spearman(dataset, metrics, spearman.threshold, verbose)
-    AutoSpearman.metrics <-
-      stepwise.vif(dataset, spearman.metrics, vif.threshold, verbose)
-    
-    return(AutoSpearman.metrics)
-  }
-
-get_p_code<- function(pvalue){
-  if(length(pvalue) == 0)
-     return ("$-$")
-  
-  p_code =""
-  if (pvalue <0.001){
-    p_code ="$^{***}$"
-  }
-  else if (pvalue <0.01){ 
-    p_code ="$^{**}$"
-  }
-  else if (pvalue <0.05){
-    p_code ="$^{*}$"
-  }
-  return (p_code)
-}
-
-get_OR_code<- function(or_value){
-  if(length(or_value) == 0)
-    return ("$-$")
-  
-  or_code =""
-  if (or_value >1){
-    or_code =paste("\\biasToWomen{",or_value,"}", sep="")
-  }
-  else or_code =paste("\\biasToMen{",or_value,"}", sep="")
-  
-  return (or_code)
-}
-
-
-get_impact_code<- function(impact_value){
-  if(length(impact_value) == 0)
-    return ("$-$")
-  
-  impact_code =""
-  if (impact_value <1){
-    impact_code =paste("\\biasToWomen{",impact_value,"}", sep="")
-  }
-  else impact_code =paste("\\biasToMen{",impact_value,"}", sep="")
-  
-  return (impact_code)
-}
-
-get_z_code<- function(z_value){
-  if(length(z_value) == 0)
-    return ("$-$")
-  
-  z_code =""
-  if (z_value <0){
-    z_code =paste("\\biasToWomen{",z_value,"}", sep="")
-  }
-  else z_code =paste("\\biasToMen{",z_value,"}", sep="")
-  
-  return (z_code)
-}
-
-get_z_code_review<- function(z_value){
-  if(length(z_value) == 0)
-    return ("$-$")
-  
-  z_code =""
-  if (z_value >0){
-    z_code =paste("\\biasToWomen{",z_value,"}", sep="")
-  }
-  else z_code =paste("\\biasToMen{",z_value,"}", sep="")
-  
-  return (z_code)
-}
-
-get_GN_code<- function(or_value){
-  if((length(or_value) == 0) ||is.na(or_value))
-    return ("$-$")
-  
-  
-  or_code =""
-  if (or_value >1){
-    or_code =paste("\\biasToGendered{",or_value,"}", sep="")
-  }
-  else or_code =or_value
-  
-  return (or_code)
-}
+source("common.R")
 
 library(rstudioapi)
 cur_dir = dirname(getSourceEditorContext()$path)
@@ -251,11 +28,6 @@ projects=c("android" ="Android",
            "wikimedia"="Wikimedia"
            )
 
-# dynamic_vars = c('log_insertions','log_deletions','log_total_churn','number_patches',
-#                  'log_author_promptness', 'is_bugfix',
-#                  'file_count','doc_file_ratio','num_new_files', 'change_entropy',
-#                  'title_length',
-#                  'description_length','title_redability','description_readability')
 
 
 dynamic_vars = c('log_insertions','log_deletions','log_total_churn','number_patches',
@@ -264,19 +36,16 @@ dynamic_vars = c('log_insertions','log_deletions','log_total_churn','number_patc
                  'title_length',
                  'description_length','title_redability','description_readability')
 
-result_vars = c('log_insertions','log_deletions','log_total_churn','number_patches',
-                'promptness', 'is_bugfix',
-                'file_count','doc_file_ratio','num_new_files', 'change_entropy',
-                'title_length',
-                'description_length','title_redability','description_readability')
+result_vars = c( 'log_total_churn', 'num_new_files', 'is_bugfix', 'file_count', 'change_entropy',
+                 'doc_file_ratio',   'log_insertions','log_deletions', 
+                 'title_length',  'description_length',  'title_redability','description_readability',
+                 'promptness', 'number_patches' )
 
- # rows = c('IT','DT','TC','NP',
- #          'AD', 'IB',
- #          'FC','DF','NN', 'CE',
- #          'LT',
- #          'LD','TR','DR')
 
-rows <- result_vars
+rows_nc <- result_vars
+
+rows_non_nc <- result_vars
+
 
 #print(rows)
 
@@ -284,13 +53,17 @@ RQ1_latex_table_code =""
 
 project="ovirt"
 
-r_sq = "\textit{R-squared}"
+r_sq_nc = "\textit{R-squared}"
 
+r_sq_non_nc = "\textit{R-squared}"
 
+#Newcomer analysis table
 for (project in names(projects)) {
   #p_name =projects[project]
   datafile =paste("gerrit_", project, ".csv", sep="")
-  #print(datafile)
+  
+  print(project)
+  
   dataset = read.csv(datafile, header = TRUE)
   print(nrow(dataset))
   
@@ -303,7 +76,7 @@ for (project in names(projects)) {
   dataset$promptness=10/(dataset$log_author_promptness+1)
   
   newcomerDS =dataset[dataset$is_newcomer==1,]
-  otherDS =dataset[dataset$is_newcomer==0,]
+  #otherDS =dataset[dataset$is_newcomer==0,]
   
   #print(dynamic_vars)
   
@@ -329,6 +102,9 @@ for (project in names(projects)) {
   
   newcomer_glm_acceptance <- glm(as.formula(formula_string) , data=newcomerDS,  x=T, y=T, 
                                  family = binomial)
+  
+  null_model <- glm(as.formula("is_accepted ~ 1 ") , data=newcomerDS,  x=T, y=T, 
+                                 family = binomial)
   av = anova(newcomer_glm_acceptance, type="II", test="LR")
   #summary(newcomer_glm_acceptance)
   
@@ -338,14 +114,32 @@ for (project in names(projects)) {
     odds_ratio =exp(coef(newcomer_glm_acceptance)[result_vars[i]])
     #print(format(round(odds_ratio, 2), nsmall = 2))
     if(is.na(odds_ratio)||is.infinite(odds_ratio)){
-      rows[i] <- paste(rows[i],'--',sep=" & ")
-      rows[i] <- paste(rows[i],'--',sep=" & ")
+      rows_nc[i] <- paste(rows_nc[i],'--',sep=" & ")
+      rows_nc[i] <- paste(rows_nc[i],'--',sep=" & ")
     }
     else{
       pvalue =round(model_summary[grepl(paste(result_vars[i],'$',sep=""),row.names(model_summary)), 4],4)
-      rows[i] <- paste(rows[i],format(round(odds_ratio, 2), nsmall = 2),sep=" & ")
-      rows[i] <- paste(rows[i],get_p_code(pvalue),sep="")
-      rows[i] <- paste(rows[i], format(round(100*av[result_vars[i], 2]/av['NULL', 4], 2), nsmall = 2) ,sep=" & ")
+      
+      if(length(pvalue) ==0)
+        pvalue =0.5
+      
+      if(pvalue<0.05){
+      
+        if (odds_ratio<1) {
+          rows_nc[i] <- paste( rows_nc[i], "& \\", "negative{" ,sep="")
+        }
+        else {
+          rows_nc[i] <- paste(rows_nc[i], "& \\", "positive{" ,sep="")
+        }
+        rows_nc[i] <- paste(rows_nc[i],format(round(odds_ratio, 2), nsmall = 2),sep="  ") 
+        rows_nc[i] <- paste(rows_nc[i],get_p_code(pvalue),sep="")
+        rows_nc[i] <- paste(rows_nc[i], "}" ,sep=" ")
+      }
+      
+      else rows_nc[i] <- paste(rows_nc[i],format(round(odds_ratio, 2), nsmall = 2),sep="& ")
+      
+      rows_nc[i] <- paste(rows_nc[i], format(round(100*av[result_vars[i], 2]/av['NULL', 4], 2), nsmall = 2) ,sep=" & ")
+      
     }
     
     #print(pvalue)
@@ -354,13 +148,19 @@ for (project in names(projects)) {
   
   
   veal=round(PseudoR2(newcomer_glm_acceptance,which = "VeallZimmermann"),3)
+  
+  print (lrtest(newcomer_glm_acceptance, null_model)) #Log likelihood test
   #print(project)
   #print(veal)
-  r_sq <- paste(r_sq,veal,sep=" & ")
+  r_sq_nc <- paste(r_sq_nc,veal,sep=" & ")
   
+  print("Newcomer odds ratios:")
   model_coefficients <- coef(newcomer_glm_acceptance)
   #print(model_summary)
-  #print(exp(model_coefficients))
+  print(exp(model_coefficients))
+  
+
+  
   
   otherDS =dataset[dataset$is_newcomer==0,]
   
@@ -384,6 +184,9 @@ for (project in names(projects)) {
   non_newcomer_glm_acceptance <- glm(as.formula(non_new_formula_string) , data=otherDS,  x=T, y=T, 
                                      family = binomial)
   
+  null_model <- glm(as.formula("is_accepted ~ 1 ") , data=otherDS,  x=T, y=T, 
+                    family = binomial)
+  
   print('Anova print')
   av = anova(non_newcomer_glm_acceptance, type="II", test="LR")
   #print(av[`Resid. Dev`])
@@ -398,42 +201,57 @@ for (project in names(projects)) {
     #print(format(round(odds_ratio, 2), nsmall = 2))
     
     if(is.na(odds_ratio)||is.infinite(odds_ratio)){
-      rows[i] <- paste(rows[i],'--',sep=" & ")
-      rows[i] <- paste(rows[i],'--',sep=" & ")
+      rows_non_nc[i] <- paste(rows_non_nc[i],'--',sep=" & ")
+      rows_non_nc[i] <- paste(rows_non_nc[i],'--',sep=" & ")
     }
     else{
       pvalue =round(model_summary[grepl(paste(result_vars[i],'$',sep=""),row.names(model_summary)), 4],4)
-      rows[i] <- paste(rows[i],format(round(odds_ratio, 2), nsmall = 2),sep=" & ")
-      rows[i] <- paste(rows[i],get_p_code(pvalue),sep="")
-      rows[i] <- paste(rows[i], format(round(100*av[result_vars[i], 2]/av['NULL', 4], 2), nsmall = 2) ,sep=" & ")
+      
+       if(length(pvalue) ==0)
+         pvalue =0.5
+      
+      if(pvalue<0.05){
+        if (odds_ratio<1) {
+          rows_non_nc[i] <- paste( rows_non_nc[i], "& \\", "negative{" ,sep="")
+        }
+        else {
+          rows_non_nc[i] <- paste(rows_non_nc[i], "& \\", "positive{" ,sep="")
+        }
+        rows_non_nc[i] <- paste(rows_non_nc[i],format(round(odds_ratio, 2), nsmall = 2),sep="  ") 
+        rows_non_nc[i] <- paste(rows_non_nc[i],get_p_code(pvalue),sep="")
+        rows_non_nc[i] <- paste(rows_non_nc[i], "}" ,sep=" ")
+      }
+      
+      else rows_non_nc[i] <- paste(rows_non_nc[i],format(round(odds_ratio, 2), nsmall = 2),sep="& ")
+      rows_non_nc[i] <- paste(rows_non_nc[i], format(round(100*av[result_vars[i], 2]/av['NULL', 4], 2), nsmall = 2) ,sep=" & ")
     }
   }
   
   #print(rows)
   
   veal=round(PseudoR2(non_newcomer_glm_acceptance,which = "VeallZimmermann"),3)
+  print (lrtest(non_newcomer_glm_acceptance, null_model))
   #print(veal)
   
-  r_sq <- paste(r_sq,veal,sep=" & ")
+  r_sq_non_nc <- paste(r_sq_non_nc,veal,sep=" & ")
   
   #model_coefficients <- coef(non_newcomer_glm_acceptance)
   #print(model_summary)
-  #print(exp(model_coefficients))
+  print("non-newcomer odds ratios")
+  print(exp(model_coefficients))
   #break
   
 }
 
 
-
-print(rows)
-print(r_sq)
-
-
+print("newcomer")
+print(r_sq_nc)
+print(rows_nc)
 
 
-
-
-
+print("non-newcomer")
+print(r_sq_non_nc)
+print(rows_non_nc)
 
 
 
@@ -453,49 +271,7 @@ print(r_sq)
 
 
 
-#draw hierarchical cluster
-project="android"
 
-datafile =paste("gerrit_", project, ".csv", sep="")
-print(datafile)
-dataset = read.csv(datafile, header = TRUE)
-
-dataset$doc_file_ratio=  dataset$doc_file_count/dataset$file_count
-dataset$log_author_promptness=log(dataset$author_promptness+1)
-dataset$log_insertions=log(dataset$insertions+1)
-dataset$log_deletions=log(dataset$deletions+1)
-dataset$log_total_churn=log(dataset$total_churn+1)
-
-newcomerDS =dataset[dataset$is_newcomer==1,]
-
-
-summary(newcomerDS)
-
-
-newcomerDS <- rename(newcomerDS, IT=log_insertions, DT=log_deletions,TC=log_total_churn, NP=number_patches,
-                     AD=log_author_promptness, IB=is_bugfix,
-                     FC=file_count, DF=doc_file_ratio, NN=num_new_files,
-                     CE=change_entropy,  LT=title_length,
-                     LD=description_length, TR=title_redability, DR=description_readability)
-
-summary(newcomerDS)
-
-dynamic_vars = c('IT','DT','TC','NP',
-                 'AD','IB',
-                 'FC','DF',
-                 'NN',
-                 'CE','LT',
-                 'LD','TR','DR')
-
-setEPS()                                             # Set postscript arguments
-postscript("cluster.eps") 
-
-vc <- varclus(~ ., data=newcomerDS[,dynamic_vars], trans="abs")
-#Plot hierarchical clusters and the spearman's correlation threshold of 0.7
-plot(vc)
-threshold <- 0.7
-abline(h=1-threshold, col = "red", lty = 2)
-dev.off()   
 
 
 
