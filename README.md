@@ -1,6 +1,8 @@
 # Replication package for "From First Patch to Long-Term Contributor: Evaluating Onboarding Recommendations for OSS Newcomers", Currently, under review.
 
-./SLR directly includes step by step summary of the systematic literature review.
+./SLR directly includes step by step summary of the initial systematic literature review done in 2022.
+
+./SLR-updated  includes step by step summary of the systematic literature review redone in 2024.
 
 ./empirical_study includes analysis scripts and dataset for the paper. 
 
